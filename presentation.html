@@ -1,0 +1,799 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Rotate &amp; Quantize</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&family=VT323&display=swap" rel="stylesheet">
+<style>
+:root{
+--bg:#0a0a1a;--bg2:#0f0f2e;--panel:rgba(20,15,50,0.85);--edge:#6b21a8;
+--gold:#ffd23f;--mint:#6ee7b7;--pink:#f472b6;--blue:#818cf8;--purple:#a855f7;
+--violet:#7c3aed;--cyan:#22d3ee;--ink:#f4f1ff;--dim:#c4b5fd;
+}
+*{box-sizing:border-box;margin:0;padding:0;}
+html,body{background:var(--bg);color:var(--ink);font-family:'VT323',monospace;overflow:hidden;height:100%;image-rendering:pixelated;}
+body::before{content:"";position:fixed;inset:0;background:repeating-linear-gradient(to bottom,rgba(255,255,255,.012) 0,rgba(255,255,255,.012) 1px,transparent 1px,transparent 4px);pointer-events:none;z-index:400;}
+#space{position:fixed;inset:0;z-index:0;}
+.deck{position:relative;width:100%;height:100vh;z-index:10;}
+.slide{position:absolute;inset:0;display:none;flex-direction:column;padding:44px 76px 68px;}
+.slide.active{display:flex;animation:sIn .4s cubic-bezier(.22,.68,0,1.1) both;}
+@keyframes sIn{from{opacity:0;transform:translateY(18px) scale(.98)}to{opacity:1;transform:none}}
+.eye{font-family:'Press Start 2P',monospace;font-size:9px;letter-spacing:3px;color:var(--purple);margin-bottom:10px;text-shadow:0 0 12px rgba(168,85,247,.6);}
+h1{font-family:'Press Start 2P',monospace;font-size:clamp(14px,2.3vw,30px);line-height:1.7;margin-bottom:14px;text-shadow:0 0 20px rgba(168,85,247,.4),3px 3px 0 rgba(0,0,0,.6);}
+p,li{font-size:clamp(17px,1.5vw,22px);line-height:1.65;color:var(--dim);}
+.lead{color:var(--ink);font-size:clamp(19px,1.65vw,24px);}
+.content{flex:1;display:flex;gap:36px;align-items:center;min-height:0;}
+.col{flex:1;min-width:0;}
+.panel{background:var(--panel);border:2px solid var(--edge);box-shadow:0 0 30px rgba(107,33,168,.3),inset 0 0 0 1px rgba(168,85,247,.1);padding:20px;border-radius:4px;backdrop-filter:blur(8px);}
+ul{padding-left:20px;}
+li{margin-bottom:9px;}
+li::marker{color:var(--purple);}
+.mono{color:var(--cyan);}
+.tag{display:inline-block;font-family:'Press Start 2P',monospace;font-size:8px;color:#fff;background:linear-gradient(135deg,var(--violet),var(--pink));padding:3px 7px;margin-right:7px;border-radius:2px;box-shadow:0 0 8px rgba(244,114,182,.4);}
+.stat{font-family:'Press Start 2P',monospace;font-size:clamp(18px,1.9vw,28px);background:linear-gradient(135deg,var(--gold),var(--pink));-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;}
+.slbl{color:var(--dim);font-size:13px;margin-top:3px;}
+.g2{display:grid;grid-template-columns:1fr 1fr;gap:12px;}
+.g3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px;}
+.ctr{display:flex;align-items:center;justify-content:center;height:100%;}
+.navbar{position:fixed;bottom:0;left:0;right:0;height:60px;display:flex;align-items:center;justify-content:space-between;padding:0 26px;background:linear-gradient(to top,rgba(10,10,26,.9),transparent);z-index:600;backdrop-filter:blur(4px);}
+.trail{flex:1;display:flex;align-items:center;gap:4px;margin:0 16px;overflow:hidden;}
+.nd{width:10px;height:10px;background:rgba(107,33,168,.4);border:2px solid var(--edge);cursor:pointer;flex-shrink:0;transition:background .2s,box-shadow .2s;border-radius:1px;}
+.nd.done{background:var(--mint);}
+.nd.now{background:var(--purple);box-shadow:0 0 8px rgba(168,85,247,.7);}
+.lnk{height:2px;width:10px;background:rgba(107,33,168,.3);flex-shrink:0;transition:background .3s;}
+.lnk.done{background:var(--mint);}
+.nlbl{font-family:'Press Start 2P',monospace;font-size:8px;color:var(--dim);min-width:48px;}
+.btn{font-family:'Press Start 2P',monospace;font-size:9px;color:#fff;border:none;padding:9px 14px;cursor:pointer;border-radius:2px;transition:transform .08s,box-shadow .08s;}
+.btn:active{transform:translate(2px,2px);}
+.btn.g{background:linear-gradient(135deg,var(--violet),var(--purple));box-shadow:0 0 12px rgba(168,85,247,.5);}
+.btn.b{background:linear-gradient(135deg,#1e40af,var(--blue));box-shadow:0 0 12px rgba(129,140,248,.4);}
+canvas{image-rendering:pixelated;}
+.cc{border:2px solid var(--edge);border-radius:4px;box-shadow:0 0 20px rgba(107,33,168,.3);}
+input[type=range]{-webkit-appearance:none;width:100%;height:6px;background:rgba(107,33,168,.4);cursor:pointer;margin:10px 0;border-radius:3px;border:1px solid var(--edge);}
+input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:16px;height:16px;background:var(--purple);border:2px solid var(--ink);border-radius:2px;cursor:pointer;box-shadow:0 0 8px rgba(168,85,247,.6);}
+.mascot{width:64px;height:64px;position:relative;flex-shrink:0;filter:drop-shadow(0 0 8px rgba(110,231,183,.5));}
+.mascot .px{position:absolute;width:8px;height:8px;}
+.glow{color:var(--cyan);text-shadow:0 0 20px rgba(34,211,238,.5),3px 3px 0 rgba(0,0,0,.5);}
+.gpurple{color:var(--purple);text-shadow:0 0 20px rgba(168,85,247,.6);}
+.flk{animation:flk 4s infinite;}
+@keyframes flk{0%,93%,96%,100%{opacity:1}94%,95%{opacity:.55}}
+.pls{animation:pls 2s ease-in-out infinite;}
+@keyframes pls{0%,100%{opacity:1}50%{opacity:.4}}
+.aul li{opacity:0;transform:translateX(-14px);transition:opacity .35s,transform .35s;}
+.slide.active .aul li:nth-child(1){opacity:1;transform:none;transition-delay:.1s}
+.slide.active .aul li:nth-child(2){opacity:1;transform:none;transition-delay:.25s}
+.slide.active .aul li:nth-child(3){opacity:1;transform:none;transition-delay:.4s}
+.slide.active .aul li:nth-child(4){opacity:1;transform:none;transition-delay:.55s}
+.slide.active .aul li:nth-child(5){opacity:1;transform:none;transition-delay:.7s}
+.pgbar{width:100%;height:3px;background:rgba(107,33,168,.3);margin-bottom:14px;border-radius:2px;}
+.pgfill{height:3px;background:linear-gradient(to right,var(--cyan),var(--purple),var(--pink));transition:width .6s ease;border-radius:2px;box-shadow:0 0 8px rgba(168,85,247,.5);}
+.orbit-wrap{position:relative;width:260px;height:260px;flex-shrink:0;}
+.planet{position:absolute;border-radius:50%;box-shadow:0 0 20px currentColor;}
+.chip{display:inline-flex;align-items:center;gap:6px;background:rgba(107,33,168,.25);border:1px solid var(--edge);padding:5px 10px;border-radius:20px;font-size:clamp(16px,1.4vw,20px);color:var(--ink);margin:3px;}
+.stat-card{text-align:center;padding:18px 12px;}
+.big-num{font-family:'Press Start 2P',monospace;font-size:clamp(22px,2.5vw,36px);background:linear-gradient(135deg,var(--gold),var(--pink),var(--purple));-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;display:block;margin-bottom:6px;}
+.slide-in-l{opacity:0;transform:translateX(-30px);transition:opacity .5s ease,transform .5s ease;}
+.slide-in-r{opacity:0;transform:translateX(30px);transition:opacity .5s ease,transform .5s ease;}
+.slide.active .slide-in-l,.slide.active .slide-in-r{opacity:1;transform:none;transition-delay:.2s;}
+.fade-up{opacity:0;transform:translateY(20px);transition:opacity .5s,transform .5s;}
+.slide.active .fade-up{opacity:1;transform:none;}
+.fd1{transition-delay:.1s}.fd2{transition-delay:.25s}.fd3{transition-delay:.4s}.fd4{transition-delay:.55s}.fd5{transition-delay:.7s}.fd6{transition-delay:.85s}
+.card{background:var(--panel);border:2px solid var(--edge);border-radius:4px;padding:12px;text-align:center;}
+.card h3{font-size:13px;color:var(--dim);margin-bottom:8px;font-weight:normal;letter-spacing:1px;}
+.card.coral h3{color:var(--pink);}
+.card.gold h3{color:var(--gold);}
+iframe.demo-frame{width:100%;height:100%;border:2px solid var(--edge);border-radius:6px;background:#1b1730;box-shadow:0 0 30px rgba(107,33,168,.3);}
+</style>
+</head>
+<body>
+<canvas id="space" style="position:fixed;inset:0;z-index:0;width:100%;height:100%"></canvas>
+<div class="deck">
+
+<!-- S1 TITLE -->
+<section class="slide active">
+<div style="position:absolute;inset:0;overflow:hidden;pointer-events:none;">
+<div style="position:absolute;top:10%;left:5%;width:180px;height:180px;background:radial-gradient(circle,rgba(168,85,247,.18),transparent 70%);border-radius:50%;animation:pls 3s infinite;"></div>
+<div style="position:absolute;bottom:20%;right:8%;width:120px;height:120px;background:radial-gradient(circle,rgba(34,211,238,.12),transparent 70%);border-radius:50%;animation:pls 4s infinite .5s;"></div>
+</div>
+<div style="display:flex;flex-direction:column;justify-content:center;flex:1;gap:6px;position:relative;">
+<div class="eye fade-up fd1">OVERVIEW</div>
+<h1 class="flk fade-up fd2" style="font-size:clamp(20px,3.4vw,42px);">ROTATE &amp; QUANTIZE<br><span class="glow">Shrinking AI Models</span><br><span class="gpurple">Without Losing Their Mind</span></h1>
+<div class="pgbar fade-up fd3"><div class="pgfill" id="hbar" style="width:0"></div></div>
+<p class="lead fade-up fd3" style="max-width:600px;">How spinning a vector before you round it quietly saves <b style="color:var(--pink)">gigabytes of memory</b> — with almost no loss of accuracy. Used in real LLMs today.</p>
+<div class="fade-up fd4" style="display:flex;gap:10px;flex-wrap:wrap;margin-top:10px;">
+<span class="chip">Data at scale</span>
+<span class="chip">~15 min</span>
+<span class="chip">Live demo included</span>
+</div>
+<div style="display:flex;align-items:center;gap:14px;margin-top:14px;" class="fade-up fd5">
+<div class="mascot" id="m0"></div>
+<p style="color:var(--dim);font-size:clamp(16px,1.4vw,20px);">Navigate with <span class="mono">ARROW KEYS</span> or the buttons below</p>
+</div>
+</div>
+</section>
+
+<!-- S2 MAP -->
+<section class="slide">
+<div class="eye">AGENDA</div>
+<h1>Our Route Through This Talk</h1>
+<div class="content">
+<div class="col panel slide-in-l">
+<ul class="aul" style="list-style:none;padding:0;">
+<li style="margin-bottom:12px"><span class="tag">01</span> What is a vector?</li>
+<li style="margin-bottom:12px"><span class="tag">02</span> Why AI models are enormous</li>
+<li style="margin-bottom:12px"><span class="tag">03</span> Quantization — the compression trick</li>
+<li style="margin-bottom:12px"><span class="tag">04</span> Why quantization breaks things</li>
+<li style="margin-bottom:12px"><span class="tag">05</span> The rotation fix — live widget</li>
+<li style="margin-bottom:12px"><span class="tag">06</span> Real world: LLMs &amp; edge devices</li>
+</ul>
+</div>
+<div class="col ctr slide-in-r">
+<div class="orbit-wrap" id="orbitWrap">
+<canvas id="cOrbit" width="260" height="260" style="position:absolute;inset:0;"></canvas>
+</div>
+</div>
+</div>
+</section>
+
+<!-- S3 VECTORS -->
+<section class="slide">
+<div class="eye">VECTORS</div>
+<h1>What Is a Vector, In AI Terms?</h1>
+<div class="content">
+<div class="col slide-in-l">
+<p class="lead" style="margin-bottom:14px;">A vector is a <span style="color:var(--gold)">list of numbers</span> that encodes the <i>meaning</i> of something as a point in space.</p>
+<ul class="aul">
+<li>In games: <span class="mono">(x, y)</span> is a 2D vector — position in the world.</li>
+<li>In AI, a word like <span class="mono">"cat"</span> becomes a vector of <b>1000+ numbers</b> that captures its meaning, context, and relationships.</li>
+<li>Words with similar meaning (cat, kitten) land <i>nearby</i> in this space. Opposites land far apart.</li>
+<li>Images, audio, and video are all turned into vectors too — it's the universal AI language.</li>
+</ul>
+</div>
+<div class="col slide-in-r"><div class="panel" style="padding:12px;"><canvas id="c3" width="320" height="250" class="cc" style="width:100%;background:#07071a;"></canvas></div></div>
+</div>
+</section>
+
+<!-- S4 SCALE -->
+<section class="slide">
+<div class="eye">THE SCALE PROBLEM</div>
+<h1>Every AI Model Is Swimming in Vectors</h1>
+<div class="content" style="flex-direction:column;gap:20px;">
+<div class="g2" style="width:100%;">
+<div class="panel stat-card fade-up fd1"><span class="big-num" id="cnt1">0</span><div class="slbl">dimensions per embedding</div><p style="font-size:13px;margin-top:6px;color:var(--dim)">GPT-4 uses ~12,288 dims per token</p></div>
+<div class="panel stat-card fade-up fd2"><span class="big-num" id="cnt2">0</span><div class="slbl">parameters in one frontier LLM</div><p style="font-size:13px;margin-top:6px;color:var(--dim)">Each parameter is a floating-point number</p></div>
+<div class="panel stat-card fade-up fd3"><span class="big-num">4 bytes</span><div class="slbl">per number at float32</div><p style="font-size:13px;margin-top:6px;color:var(--dim)">70B params &times; 4 bytes = 280 GB uncompressed</p></div>
+<div class="panel stat-card fade-up fd4"><span class="big-num" style="font-size:clamp(16px,1.8vw,24px);">280 GB</span><div class="slbl">for one unquantized LLM</div><p style="font-size:13px;margin-top:6px;color:var(--dim)">That's 60 Blu-ray discs. Won't fit in RAM.</p></div>
+</div>
+<p class="lead fade-up fd5" style="text-align:center;">This is why compression is not optional — it's what makes AI <b style="color:var(--pink)">actually deployable</b>.</p>
+</div>
+</section>
+
+<!-- S5 QUANTIZATION -->
+<section class="slide">
+<div class="eye">QUANTIZATION</div>
+<h1>What Is Quantization?</h1>
+<div class="content">
+<div class="col slide-in-l">
+<p class="lead" style="margin-bottom:14px;">Quantization = rounding numbers onto a <span style="color:var(--cyan)">coarser grid</span> to save space.</p>
+<ul class="aul">
+<li><span class="mono">float32</span> = 32 bits, ~7 decimal digits of precision</li>
+<li><span class="mono">int8</span> = 8 bits, only 256 possible values — <b>4x smaller</b></li>
+<li><span class="mono">int4</span> = 4 bits, 16 possible values — <b>8x smaller</b></li>
+<li>Think of it like reducing a 4K photo to a 256-color GIF. Same scene, less data, some quality loss.</li>
+<li>The goal: lose as little quality as possible while gaining as much compression as possible.</li>
+</ul>
+</div>
+<div class="col panel slide-in-r" style="padding:12px;"><canvas id="c5" width="320" height="260" class="cc" style="width:100%;background:#07071a;"></canvas></div>
+</div>
+</section>
+
+<!-- S6 WHY IT MATTERS -->
+<section class="slide">
+<div class="eye">THE PAYOFF</div>
+<h1>What Quantization Unlocks</h1>
+<div class="content">
+<div class="col g2 slide-in-l">
+<div class="panel stat-card"><span class="big-num">4&ndash;8x</span><div class="slbl">file size reduction</div></div>
+<div class="panel stat-card"><span class="big-num" style="color:var(--cyan)">&gt;&gt;</span><div class="slbl">faster inference speed</div></div>
+<div class="panel stat-card"><span class="big-num" style="color:var(--pink)">&#128241;</span><div class="slbl">on-device AI on phones</div></div>
+<div class="panel stat-card"><span class="big-num" style="color:var(--mint)">&#9889;</span><div class="slbl">less power &amp; battery drain</div></div>
+</div>
+<div class="col slide-in-r">
+<p class="lead" style="margin-bottom:12px;">The gap between a model that needs a $10,000 GPU server and one that runs on your phone <b style="color:var(--gold)">is quantization</b>.</p>
+<ul class="aul">
+<li>Llama 3 70B: 280 GB unquantized vs <b style="color:var(--mint)">~40 GB at 4-bit</b> — fits on a gaming PC</li>
+<li>Whisper, Phi, and Mistral all ship quantized by default for edge deployment</li>
+<li>Apple uses quantized models in Siri, autocorrect, and camera AI</li>
+</ul>
+</div>
+</div>
+</section>
+
+<!-- S7 ERROR -->
+<section class="slide">
+<div class="eye">THE TRAP</div>
+<h1>Why Quantization Breaks Things</h1>
+<div class="content">
+<div class="col slide-in-l">
+<p class="lead" style="margin-bottom:14px;">Rounding always loses information. The question is <i>how much</i>.</p>
+<ul class="aul">
+<li>Real AI weight vectors have <b style="color:var(--pink)">outlier values</b> — a few numbers that are 10&ndash;100x larger than the rest.</li>
+<li>The quantization grid must stretch to cover these outliers. Now all the small values get crammed into just a few grid slots — badly rounded.</li>
+<li>In a transformer, this error propagates through every layer. Small errors compound into <b>garbled output</b>.</li>
+<li>This is why naive int4 quantization often degrades model quality noticeably.</li>
+</ul>
+</div>
+<div class="col panel slide-in-r" style="padding:12px;"><canvas id="c7" width="320" height="260" class="cc" style="width:100%;background:#07071a;"></canvas></div>
+</div>
+</section>
+
+<!-- S8 ROTATION INTUITION -->
+<section class="slide">
+<div class="eye">THE FIX</div>
+<h1>The Trick: <span class="glow">Rotate</span> Before You Round</h1>
+<div class="content">
+<div class="col slide-in-l">
+<p class="lead" style="margin-bottom:14px;">The insight: <span style="color:var(--pink)">outliers are the enemy</span>. So get rid of them — by rotating.</p>
+<ul class="aul">
+<li>A rotation is <b>mathematically lossless</b> — it preserves all distances and angles. Like spinning a photograph: same info, different orientation.</li>
+<li>After rotating, the outlier energy gets <b>spread evenly</b> across all dimensions. No single value is extreme anymore.</li>
+<li>Now quantize — the grid fits the data perfectly. Much less rounding error.</li>
+<li>When you need the original values back, just rotate in reverse. <b>Zero information lost</b> from the rotation itself.</li>
+</ul>
+</div>
+<div class="col ctr slide-in-r"><canvas id="c8" width="260" height="260" class="cc" style="background:#07071a;"></canvas></div>
+</div>
+</section>
+
+<!-- S9 WIDGET -->
+<section class="slide">
+<div class="eye">TRY IT YOURSELF</div>
+<h1>Live Widget: Rotate &amp; Quantize a 2D Vector</h1>
+<div class="content">
+<div class="col panel slide-in-l" style="padding:12px;"><canvas id="cR" width="360" height="300" class="cc" style="width:100%;background:#07071a;"></canvas></div>
+<div class="col slide-in-r">
+<p class="lead" style="margin-bottom:10px;">Drag the slider. Watch the <span style="color:var(--blue)">blue vector</span> rotate, and see the <span style="color:var(--pink)">pink dot</span> (rounded position) and error change.</p>
+<input type="range" id="rsl" min="0" max="90" value="0">
+<p style="margin-bottom:8px;">Rotation: <span class="mono" id="rval">0&deg;</span> &nbsp;|&nbsp; Rounding error: <span class="mono" id="eval">--</span></p>
+<div class="panel" style="padding:12px;margin-top:10px;">
+<p style="color:var(--cyan);margin-bottom:6px;">What to notice:</p>
+<ul class="aul" style="font-size:clamp(14px,1.3vw,18px);">
+<li>At 0&deg; — vector points diagonally, error is medium</li>
+<li>Near 45&deg; — vector aligns with a grid diagonal, error drops</li>
+<li>The pink dot snaps closer to the true blue tip</li>
+<li>In high-dim space this effect is much more dramatic</li>
+</ul>
+</div>
+</div>
+</div>
+</section>
+
+<!-- S10 MATH -->
+<section class="slide">
+<div class="eye">THE MATH</div>
+<h1>The Formula, Without Scary Math</h1>
+<div class="content">
+<div class="col panel slide-in-l" style="text-align:center;padding:28px 20px;">
+<p class="mono" style="font-size:clamp(15px,1.5vw,21px);color:var(--gold);margin-bottom:18px;">v_quant = R&#8315;&#185; &middot; round( R &middot; v )</p>
+<div style="height:1px;background:rgba(107,33,168,.4);margin:16px 0;"></div>
+<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;text-align:left;">
+<div class="panel" style="padding:10px;"><span class="mono" style="color:var(--purple);">R</span><p style="font-size:14px;margin-top:4px;">rotation matrix (orthogonal)</p></div>
+<div class="panel" style="padding:10px;"><span class="mono" style="color:var(--cyan);">R &middot; v</span><p style="font-size:14px;margin-top:4px;">rotate into nicer space</p></div>
+<div class="panel" style="padding:10px;"><span class="mono" style="color:var(--mint);">round()</span><p style="font-size:14px;margin-top:4px;">quantize on the better grid</p></div>
+<div class="panel" style="padding:10px;"><span class="mono" style="color:var(--pink);">R&#8315;&#185;</span><p style="font-size:14px;margin-top:4px;">rotate back to original space</p></div>
+</div>
+</div>
+<div class="col slide-in-r">
+<ul class="aul">
+<li>The rotation matrix <span class="mono">R</span> can be <b>random</b> (works surprisingly well) or <b>learned</b> during training for best results.</li>
+<li>In practice, <b>Hadamard matrices</b> are used — they're fast to compute and provably good at spreading outliers.</li>
+<li>The overhead is tiny: one matrix multiply before and after quantization.</li>
+<li>For a 4096-dim model, this single trick can recover most of the quality lost to int4 quantization.</li>
+</ul>
+<p class="lead" style="margin-top:14px;color:var(--cyan);">This is the core of <b>QuIP#</b>, <b>QuaRot</b>, and <b>SpinQuant</b>.</p>
+</div>
+</div>
+</section>
+
+<!-- S11 LIVE DEMO -->
+<section class="slide">
+<div style="display:flex;flex-direction:column;height:100%;gap:12px;">
+<div>
+<div class="eye">LIVE DEMO</div>
+<h1 style="font-size:clamp(18px,2.6vw,32px);">Quantize a Real Image</h1>
+<p class="lead" style="max-width:700px;">Every pixel is a 3-number vector (R, G, B). Quantize it directly, or rotate into the image's own color axes first — same color budget, compare the result.</p>
+</div>
+<div style="flex:1;min-height:0;">
+<iframe class="demo-frame" id="demoFrame"></iframe>
+</div>
+</div>
+</section>
+
+<!-- S12 LLMs -->
+<section class="slide">
+<div class="eye">REAL WORLD — LLMS</div>
+<h1>Applications: Large Language Models</h1>
+<div class="content">
+<div class="col slide-in-l">
+<ul class="aul">
+<li>Modern LLMs like Llama 3, Mistral, and Qwen all ship with quantized variants (GGUF, AWQ, GPTQ formats).</li>
+<li>Rotation-based methods — QuaRot, QuIP#, SpinQuant — push quality to near-float32 at just <b style="color:var(--gold)">4 bits per weight</b>.</li>
+<li>SpinQuant from Meta reduced perplexity degradation by <b style="color:var(--mint)">over 60%</b> vs standard quantization at the same bit-width.</li>
+<li>This is what makes a 70B model runnable on a single RTX 4090 instead of an 8-GPU server.</li>
+</ul>
+</div>
+<div class="col slide-in-r">
+<div class="panel stat-card" style="margin-bottom:12px;"><span class="big-num">70B &#8594; 1 GPU</span><div class="slbl">what good quantization unlocks</div></div>
+<div class="panel" style="padding:14px;">
+<p style="color:var(--cyan);margin-bottom:8px;">Bit-width quality ladder:</p>
+<div style="display:flex;flex-direction:column;gap:5px;font-size:clamp(14px,1.3vw,18px);">
+<div style="display:flex;gap:8px;align-items:center;"><span style="color:var(--mint);">float32</span><span style="color:var(--dim)">= perfect, 280 GB</span></div>
+<div style="display:flex;gap:8px;align-items:center;"><span style="color:var(--blue);">int8</span><span style="color:var(--dim)">= nearly lossless, 70 GB</span></div>
+<div style="display:flex;gap:8px;align-items:center;"><span style="color:var(--gold);">int4</span><span style="color:var(--dim)">= good with rotation, 35 GB</span></div>
+<div style="display:flex;gap:8px;align-items:center;"><span style="color:var(--pink);">int2</span><span style="color:var(--dim)">= experimental, ~18 GB</span></div>
+</div>
+</div>
+</div>
+</div>
+</section>
+
+<!-- S13 EDGE -->
+<section class="slide">
+<div class="eye">REAL WORLD — EDGE AI</div>
+<h1>Applications: Edge AI &amp; Everyday Devices</h1>
+<div class="content">
+<div class="col slide-in-l">
+<ul class="aul">
+<li><b style="color:var(--pink)">Phones:</b> Apple Neural Engine runs quantized CoreML models for Siri, autocorrect, photo classification. Google Pixel runs Gemini Nano — a quantized 1.8B model — locally.</li>
+<li><b style="color:var(--blue)">Laptops:</b> Microsoft Copilot+ uses quantized Phi-3 on NPUs. Runs without internet, under 2W.</li>
+<li><b style="color:var(--gold)">IoT:</b> Keyword spotting, gesture recognition, and anomaly detection on microcontrollers using sub-1MB quantized models.</li>
+<li><b style="color:var(--mint)">AR/VR:</b> Real-time depth estimation and hand tracking on headsets needs quantized models to hit 90fps.</li>
+</ul>
+</div>
+<div class="col slide-in-r" style="display:flex;flex-direction:column;gap:10px;">
+<div class="mascot" id="m12" style="margin:0 auto;width:80px;height:80px;"></div>
+<div class="panel" style="padding:14px;">
+<p style="color:var(--cyan);margin-bottom:8px;font-family:'Press Start 2P',monospace;font-size:10px;">Device sizes</p>
+<canvas id="cDevice" width="280" height="160" class="cc" style="width:100%;background:#07071a;"></canvas>
+</div>
+</div>
+</div>
+</section>
+
+<!-- S14 RESEARCH -->
+<section class="slide">
+<div class="eye">BACKGROUND</div>
+<h1>The Research Behind It</h1>
+<div class="content">
+<div class="col slide-in-l">
+<ul class="aul">
+<li><b style="color:var(--purple)">QuIP (2023):</b> First showed that random rotation before quantization dramatically reduces error. Incoherence processing — making weights look random so no outlier can dominate.</li>
+<li><b style="color:var(--cyan)">QuIP# (2024):</b> Added Hadamard transforms for speed + lookup tables for precision. Near-lossless 2-bit quantization.</li>
+<li><b style="color:var(--pink)">QuaRot (2024):</b> Rotates both weights <i>and</i> activations online. Works without any retraining.</li>
+<li><b style="color:var(--gold)">SpinQuant (Meta, 2024):</b> Learns the optimal rotation matrix end-to-end. State-of-the-art at 4-bit.</li>
+</ul>
+</div>
+<div class="col panel slide-in-r" style="display:flex;flex-direction:column;gap:14px;">
+<p class="mono" style="color:var(--gold);font-size:clamp(15px,1.4vw,19px);text-align:center;">rotate &#8594; quantize &#8594; unrotate</p>
+<div style="height:1px;background:rgba(107,33,168,.4);"></div>
+<p style="font-size:clamp(14px,1.3vw,18px);">The deeper insight: <b style="color:var(--pink)">all quantization error comes from outliers</b>. Rotation eliminates outliers without losing any information. Everything else follows.</p>
+<div style="height:1px;background:rgba(107,33,168,.4);"></div>
+<p style="font-size:clamp(13px,1.2vw,17px);color:var(--dim);">Key papers: QuIP (Chee et al. 2023), QuIP# (Tseng et al. 2024), QuaRot (Ashkboos et al. 2024), SpinQuant (Liu et al. 2024)</p>
+</div>
+</div>
+</section>
+
+<!-- S15 RECAP -->
+<section class="slide">
+<div style="display:flex;flex-direction:column;align-items:center;justify-content:center;height:100%;gap:14px;text-align:center;">
+<div style="position:absolute;inset:0;overflow:hidden;pointer-events:none;">
+<div style="position:absolute;top:10%;left:10%;width:250px;height:250px;background:radial-gradient(circle,rgba(168,85,247,.12),transparent 70%);border-radius:50%;animation:pls 4s infinite;"></div>
+<div style="position:absolute;bottom:10%;right:10%;width:180px;height:180px;background:radial-gradient(circle,rgba(244,114,182,.1),transparent 70%);border-radius:50%;animation:pls 5s infinite .7s;"></div>
+</div>
+<div class="eye pls" style="position:relative;">RECAP</div>
+<h1 style="position:relative;">Recap</h1>
+<div class="g2" style="max-width:740px;width:100%;position:relative;">
+<div class="panel fade-up fd1" style="padding:16px;text-align:left;"><b style="color:var(--gold)">Vectors</b> are numeric fingerprints — everything in AI is represented as one</div>
+<div class="panel fade-up fd2" style="padding:16px;text-align:left;"><b style="color:var(--cyan)">Quantization</b> shrinks them 4-8x but rounding error hurts quality</div>
+<div class="panel fade-up fd3" style="padding:16px;text-align:left;"><b style="color:var(--pink)">Outliers</b> are the enemy — they force a stretched grid that ruins small values</div>
+<div class="panel fade-up fd4" style="padding:16px;text-align:left;"><b style="color:var(--mint)">Rotation</b> spreads outliers evenly — lossless trick, huge quality gain</div>
+<div class="panel fade-up fd5" style="padding:16px;text-align:left;grid-column:span 2;">Used in <b>QuIP#, QuaRot, SpinQuant</b> to run 70B models on a single consumer GPU</div>
+</div>
+<div style="display:flex;align-items:center;gap:14px;position:relative;margin-top:6px;" class="fade-up fd6">
+<div class="mascot" id="m14"></div>
+<p style="color:var(--dim);font-size:clamp(17px,1.5vw,22px);">Questions?</p>
+</div>
+</div>
+</section>
+
+</div>
+
+<div class="navbar">
+<div class="nlbl" id="nlbl">1 / 15</div>
+<div class="trail" id="trail"></div>
+<div style="display:flex;gap:8px;">
+<button class="btn b" id="prevBtn">&#9664; PREV</button>
+<button class="btn g" id="nextBtn">NEXT &#9654;</button>
+</div>
+</div>
+
+<script>
+// ── DEMO IFRAME ───────────────────────────────────────────────────────────────
+(function(){
+  var frame = document.getElementById('demoFrame');
+  if(!frame) return;
+  fetch('demo.html').then(function(r){return r.text();}).then(function(html){
+    frame.srcdoc = html;
+  }).catch(function(){
+    frame.srcdoc = '<body style="background:#1b1730;color:#f5f0e8;font-family:sans-serif;padding:20px;">Could not load demo.html — make sure it is in the same folder as this presentation.</body>';
+  });
+})();
+
+// ── NAV ──────────────────────────────────────────────────────────────────────
+const slides=[...document.querySelectorAll('.slide')];
+let idx=0;
+const trail=document.getElementById('trail');
+function buildTrail(){
+  trail.innerHTML='';
+  slides.forEach((_,i)=>{
+    const n=document.createElement('div');n.className='nd';
+    n.onclick=()=>{idx=i;render();};
+    trail.appendChild(n);
+    if(i<slides.length-1){const l=document.createElement('div');l.className='lnk';trail.appendChild(l);}
+  });
+}
+function render(){
+  slides.forEach((s,i)=>s.classList.toggle('active',i===idx));
+  document.getElementById('nlbl').textContent=(idx+1)+' / '+slides.length;
+  trail.querySelectorAll('.nd').forEach((n,i)=>{n.classList.toggle('now',i===idx);n.classList.toggle('done',i<idx);});
+  trail.querySelectorAll('.lnk').forEach((l,i)=>l.classList.toggle('done',i<idx));
+  if(idx===0)setTimeout(()=>{const b=document.getElementById('hbar');if(b)b.style.width='100%';},400);
+  if(idx===3)doCount();
+}
+function go(d){idx=Math.max(0,Math.min(slides.length-1,idx+d));render();}
+document.getElementById('prevBtn').onclick=()=>go(-1);
+document.getElementById('nextBtn').onclick=()=>go(1);
+document.addEventListener('keydown',e=>{if(e.key==='ArrowRight'||e.key===' '){e.preventDefault();go(1);}if(e.key==='ArrowLeft'){e.preventDefault();go(-1);}});
+buildTrail();render();
+
+// ── MASCOT ────────────────────────────────────────────────────────────────────
+function drawMascot(el){
+  var pattern=["..gggg..",".g....g.","g.gg.gg.","g.mm..g.","g......g",".g.gg.g.","..g..g..",".g....g."];
+  el.innerHTML="";
+  var size=8;
+  for(var y=0;y<pattern.length;y++){
+    for(var x=0;x<pattern[y].length;x++){
+      var ch=pattern[y][x];
+      if(ch===".") continue;
+      var px=document.createElement("div");
+      px.style.position="absolute";
+      px.style.width=size+"px";
+      px.style.height=size+"px";
+      px.style.left=(x*size)+"px";
+      px.style.top=(y*size)+"px";
+      px.style.background=ch==="g"?"var(--mint)":"var(--pink)";
+      el.appendChild(px);
+    }
+  }
+}
+document.querySelectorAll(".mascot").forEach(drawMascot);
+
+// ── SPACE BACKGROUND ──────────────────────────────────────────────────────────
+(function(){
+  const cv=document.getElementById('space'),ctx=cv.getContext('2d');
+  let W,H,stars=[],planets=[],nebulae=[];
+  function resize(){W=cv.width=innerWidth;H=cv.height=innerHeight;init();}
+  function init(){
+    stars=[];for(let i=0;i<220;i++)stars.push({x:Math.random()*W,y:Math.random()*H,r:Math.random()*1.8+.2,a:Math.random()*.8+.2,da:(Math.random()-.5)*.004,vx:(Math.random()-.5)*.05,vy:(Math.random()-.5)*.05,c:Math.random()>.7?'#c4b5fd':Math.random()>.5?'#6ee7b7':'#f4f1ff'});
+    planets=[
+      {x:W*.85,y:H*.18,r:28,col:'#6b21a8',glow:'rgba(168,85,247,.4)',rings:true,speed:.0003},
+      {x:W*.08,y:H*.75,r:18,col:'#0e7490',glow:'rgba(34,211,238,.3)',rings:false,speed:.0005},
+      {x:W*.92,y:H*.7,r:12,col:'#be185d',glow:'rgba(244,114,182,.3)',rings:false,speed:.0008},
+      {x:W*.15,y:H*.22,r:8,col:'#d97706',glow:'rgba(251,191,36,.25)',rings:false,speed:.001}
+    ];
+    nebulae=[
+      {x:W*.5,y:H*.3,r:200,col:'rgba(168,85,247,.06)'},
+      {x:W*.2,y:H*.6,r:150,col:'rgba(34,211,238,.04)'},
+      {x:W*.8,y:H*.5,r:120,col:'rgba(244,114,182,.04)'}
+    ];
+  }
+  let t=0;
+  function tick(){
+    ctx.clearRect(0,0,W,H);
+    nebulae.forEach(n=>{const g=ctx.createRadialGradient(n.x,n.y,0,n.x,n.y,n.r);g.addColorStop(0,n.col);g.addColorStop(1,'transparent');ctx.fillStyle=g;ctx.beginPath();ctx.arc(n.x,n.y,n.r,0,Math.PI*2);ctx.fill();});
+    stars.forEach(s=>{
+      s.x+=s.vx;s.y+=s.vy;s.a+=s.da;
+      if(s.x<0)s.x=W;if(s.x>W)s.x=0;if(s.y<0)s.y=H;if(s.y>H)s.y=0;
+      if(s.a<.1||s.a>1)s.da*=-1;
+      ctx.globalAlpha=Math.max(.1,Math.min(1,s.a));
+      ctx.fillStyle=s.c;ctx.beginPath();ctx.arc(s.x,s.y,s.r,0,Math.PI*2);ctx.fill();
+    });
+    ctx.globalAlpha=1;
+    planets.forEach(p=>{
+      const px=p.x+Math.sin(t*p.speed*200)*8,py=p.y+Math.cos(t*p.speed*150)*5;
+      const g=ctx.createRadialGradient(px-p.r*.3,py-p.r*.3,0,px,py,p.r*1.8);
+      g.addColorStop(0,p.glow);g.addColorStop(1,'transparent');
+      ctx.fillStyle=g;ctx.beginPath();ctx.arc(px,py,p.r*1.8,0,Math.PI*2);ctx.fill();
+      ctx.fillStyle=p.col;ctx.beginPath();ctx.arc(px,py,p.r,0,Math.PI*2);ctx.fill();
+      ctx.fillStyle='rgba(255,255,255,.15)';ctx.beginPath();ctx.arc(px-p.r*.25,py-p.r*.25,p.r*.4,0,Math.PI*2);ctx.fill();
+      if(p.rings){
+        ctx.strokeStyle='rgba(168,85,247,.35)';ctx.lineWidth=3;
+        ctx.beginPath();ctx.ellipse(px,py,p.r*1.8,p.r*.45,-.3,0,Math.PI*2);ctx.stroke();
+        ctx.strokeStyle='rgba(168,85,247,.18)';ctx.lineWidth=1.5;
+        ctx.beginPath();ctx.ellipse(px,py,p.r*2.2,p.r*.55,-.3,0,Math.PI*2);ctx.stroke();
+      }
+    });
+    if(Math.random()<.003){
+      const sx=Math.random()*W,sy=Math.random()*H*.5;
+      ctx.strokeStyle='rgba(255,255,255,.7)';ctx.lineWidth=1.5;
+      ctx.beginPath();ctx.moveTo(sx,sy);ctx.lineTo(sx+60,sy+20);ctx.stroke();
+    }
+    t++;requestAnimationFrame(tick);
+  }
+  window.addEventListener('resize',resize);resize();tick();
+})();
+
+// ── GRID HELPER ───────────────────────────────────────────────────────────────
+function dGrid(ctx,w,h,s,c){ctx.strokeStyle=c;ctx.lineWidth=1;for(let x=0;x<=w;x+=s){ctx.beginPath();ctx.moveTo(x,0);ctx.lineTo(x,h);ctx.stroke();}for(let y=0;y<=h;y+=s){ctx.beginPath();ctx.moveTo(0,y);ctx.lineTo(w,y);ctx.stroke();}}
+
+// ── ORBIT ANIMATION (slide 2) ─────────────────────────────────────────────────
+(function(){
+  const c=document.getElementById('cOrbit'),ctx=c.getContext('2d');
+  const W=c.width,H=c.height,cx=W/2,cy=H/2;let t=0;
+  const orbs=[
+    {a:60,speed:.012,col:'#a855f7',r:8,trail:[]},
+    {a:90,speed:.007,col:'#6ee7b7',r:6,trail:[]},
+    {a:115,speed:.018,col:'#f472b6',r:5,trail:[]}
+  ];
+  (function draw(){
+    ctx.fillStyle='rgba(7,7,26,.3)';ctx.fillRect(0,0,W,H);
+    orbs.forEach(o=>{ctx.strokeStyle='rgba(107,33,168,.2)';ctx.lineWidth=1;ctx.beginPath();ctx.arc(cx,cy,o.a,0,Math.PI*2);ctx.stroke();});
+    const g=ctx.createRadialGradient(cx,cy,0,cx,cy,25);g.addColorStop(0,'rgba(255,255,255,.9)');g.addColorStop(.4,'rgba(168,85,247,.6)');g.addColorStop(1,'transparent');
+    ctx.fillStyle=g;ctx.beginPath();ctx.arc(cx,cy,25,0,Math.PI*2);ctx.fill();
+    ctx.fillStyle='white';ctx.beginPath();ctx.arc(cx,cy,6,0,Math.PI*2);ctx.fill();
+    orbs.forEach(o=>{
+      const x=cx+Math.cos(t*o.speed)*o.a,y=cy+Math.sin(t*o.speed)*o.a;
+      o.trail.push({x,y});if(o.trail.length>18)o.trail.shift();
+      for(let i=0;i<o.trail.length-1;i++){ctx.globalAlpha=(i/o.trail.length)*.5;ctx.fillStyle=o.col;ctx.beginPath();ctx.arc(o.trail[i].x,o.trail[i].y,o.r*.4,0,Math.PI*2);ctx.fill();}
+      ctx.globalAlpha=1;
+      const gg=ctx.createRadialGradient(x-o.r*.3,y-o.r*.3,0,x,y,o.r*1.5);
+      gg.addColorStop(0,o.col+'88');gg.addColorStop(1,'transparent');
+      ctx.fillStyle=gg;ctx.beginPath();ctx.arc(x,y,o.r*1.5,0,Math.PI*2);ctx.fill();
+      ctx.fillStyle=o.col;ctx.beginPath();ctx.arc(x,y,o.r,0,Math.PI*2);ctx.fill();
+    });
+    ctx.globalAlpha=1;t++;requestAnimationFrame(draw);
+  })();
+})();
+
+// ── SCATTER (slide 3) ────────────────────────────────────────────────────────
+(function(){
+  const c=document.getElementById('c3'),ctx=c.getContext('2d');
+  const W=c.width,H=c.height;
+  const words=[['cat',85,72,'#6ee7b7'],['dog',112,98,'#6ee7b7'],['kitten',65,48,'#6ee7b7'],['car',230,168,'#818cf8'],['truck',258,185,'#818cf8'],['bus',215,195,'#818cf8'],['run',192,60,'#f472b6'],['sprint',210,44,'#f472b6'],['jog',175,78,'#f472b6']];
+  let t=0;
+  (function draw(){
+    ctx.fillStyle='rgba(7,7,26,.85)';ctx.fillRect(0,0,W,H);
+    dGrid(ctx,W,H,20,'rgba(107,33,168,.12)');
+    const pr=Math.min(t/50,1);
+    ctx.font='14px VT323';
+    words.forEach(([lbl,x,y,col],i)=>{
+      const al=Math.max(0,Math.min(1,(pr-i/words.length*.5)*5));if(al<=0)return;
+      ctx.globalAlpha=al;
+      const g=ctx.createRadialGradient(x,y,0,x,y,14);g.addColorStop(0,col+'cc');g.addColorStop(1,col+'22');
+      ctx.fillStyle=g;ctx.beginPath();ctx.arc(x,y,14,0,Math.PI*2);ctx.fill();
+      ctx.fillStyle=col;ctx.beginPath();ctx.arc(x,y,4,0,Math.PI*2);ctx.fill();
+      ctx.fillStyle='#f4f1ff';ctx.fillText(lbl,x+12,y+5);ctx.globalAlpha=1;
+    });
+    const fa=.1*Math.min(t/70,1);
+    [[90,73,48,'#6ee7b7'],[237,183,38,'#818cf8'],[193,61,32,'#f472b6']].forEach(([x,y,r,col])=>{
+      ctx.globalAlpha=fa;ctx.strokeStyle=col;ctx.lineWidth=1.5;ctx.setLineDash([3,3]);
+      ctx.beginPath();ctx.arc(x,y,r,0,Math.PI*2);ctx.stroke();ctx.setLineDash([]);ctx.globalAlpha=1;
+    });
+    ctx.fillStyle='#c4b5fd';ctx.font='13px VT323';ctx.fillText('similar meaning = nearby in space',8,H-8);
+    t++;requestAnimationFrame(draw);
+  })();
+})();
+
+// ── STAIRCASE (slide 5) ───────────────────────────────────────────────────────
+(function(){
+  const c=document.getElementById('c5'),ctx=c.getContext('2d');
+  const W=c.width,H=c.height;let t=0;
+  (function draw(){
+    ctx.fillStyle='rgba(7,7,26,.85)';ctx.fillRect(0,0,W,H);
+    dGrid(ctx,W,H,24,'rgba(107,33,168,.1)');
+    const p=Math.min(t/70,1);
+    ctx.strokeStyle='#22d3ee';ctx.lineWidth=3;ctx.shadowColor='#22d3ee';ctx.shadowBlur=8;ctx.beginPath();
+    for(let x=0;x<=Math.round(280*p);x++){const y=H-35-x*.6;x===0?ctx.moveTo(22+x,y):ctx.lineTo(22+x,y);}ctx.stroke();
+    ctx.shadowBlur=0;
+    ctx.strokeStyle='#ffd23f';ctx.lineWidth=3;ctx.shadowColor='#ffd23f';ctx.shadowBlur=6;ctx.beginPath();
+    for(let i=0;i<=8;i++){const x0=22+i*(280/8),x1=22+(i+1)*(280/8),y=H-35-x0*.6;if(x1-22>280*p)break;ctx.moveTo(x0,y);ctx.lineTo(x1,y);if(i<8){ctx.lineTo(x1,H-35-x1*.6);}}ctx.stroke();
+    ctx.shadowBlur=0;
+    ctx.font='13px VT323';ctx.fillStyle='#22d3ee';ctx.fillText('float32 (smooth)',150,18);ctx.fillStyle='#ffd23f';ctx.fillText('int8 (stairs)',150,34);
+    ctx.fillStyle='rgba(196,181,253,.5)';ctx.fillText('value',5,12);ctx.fillText('index',W-42,H-12);
+    t++;requestAnimationFrame(draw);
+  })();
+})();
+
+// ── ERROR BARS (slide 7) ─────────────────────────────────────────────────────
+(function(){
+  const c=document.getElementById('c7'),ctx=c.getContext('2d');
+  const W=c.width,H=c.height,vals=[.18,.28,.14,5.2,.22,.09,.31,.17,.16,-4.9,.19,.25],bw=W/vals.length,sc=19,base=165;
+  let t=0;
+  (function draw(){
+    ctx.fillStyle='rgba(7,7,26,.85)';ctx.fillRect(0,0,W,H);
+    dGrid(ctx,W,H,18,'rgba(107,33,168,.1)');
+    const p=Math.min(t/45,1);
+    vals.forEach((v,i)=>{
+      const h=v*sc,an=Math.min((p-i/vals.length*.5)*3.5,1);if(an<=0)return;
+      const isOut=Math.abs(v)>2;
+      const col=isOut?'#f472b6':'#6ee7b7';
+      ctx.fillStyle=col;ctx.shadowColor=col;ctx.shadowBlur=isOut?12:4;
+      ctx.fillRect(i*bw+4,base-Math.max(h*an,0),bw-8,Math.abs(h)*an);
+      ctx.shadowBlur=0;
+    });
+    ctx.strokeStyle='rgba(255,255,255,.15)';ctx.lineWidth=1;ctx.beginPath();ctx.moveTo(0,base);ctx.lineTo(W,base);ctx.stroke();
+    ctx.fillStyle='#f472b6';ctx.font='13px VT323';ctx.fillText('outliers destroy grid resolution',5,H-22);
+    ctx.fillStyle='#6ee7b7';ctx.fillText('normal values = fine',5,H-8);
+    t++;requestAnimationFrame(draw);
+  })();
+})();
+
+// ── ROTATION ORBIT (slide 8) ──────────────────────────────────────────────────
+(function(){
+  const c=document.getElementById('c8'),ctx=c.getContext('2d');
+  const W=c.width,H=c.height,cx=W/2,cy=H/2,vl=90,base=[.85,.35];
+  let ang=0,trail=[];
+  (function draw(){
+    ctx.fillStyle='rgba(7,7,26,.7)';ctx.fillRect(0,0,W,H);
+    dGrid(ctx,W,H,24,'rgba(107,33,168,.12)');
+    ctx.strokeStyle='rgba(255,255,255,.1)';ctx.lineWidth=1;
+    ctx.beginPath();ctx.moveTo(0,cy);ctx.lineTo(W,cy);ctx.stroke();
+    ctx.beginPath();ctx.moveTo(cx,0);ctx.lineTo(cx,H);ctx.stroke();
+    const r=ang*Math.PI/180,rx=base[0]*Math.cos(r)-base[1]*Math.sin(r),ry=base[0]*Math.sin(r)+base[1]*Math.cos(r);
+    const vx=cx+rx*vl,vy=cy-ry*vl;
+    trail.push({x:vx,y:vy});if(trail.length>30)trail.shift();
+    for(let i=0;i<trail.length-1;i++){ctx.globalAlpha=i/trail.length*.4;ctx.strokeStyle='#a855f7';ctx.lineWidth=2;ctx.beginPath();ctx.moveTo(trail[i].x,trail[i].y);ctx.lineTo(trail[i+1].x,trail[i+1].y);ctx.stroke();}
+    ctx.globalAlpha=1;
+    ctx.strokeStyle='rgba(129,140,248,.2)';ctx.lineWidth=2;ctx.beginPath();ctx.moveTo(cx,cy);ctx.lineTo(cx+base[0]*vl,cy-base[1]*vl);ctx.stroke();
+    ctx.strokeStyle='#6ee7b7';ctx.lineWidth=3;ctx.shadowColor='#6ee7b7';ctx.shadowBlur=10;
+    ctx.beginPath();ctx.moveTo(cx,cy);ctx.lineTo(vx,vy);ctx.stroke();ctx.shadowBlur=0;
+    const dx=vx-cx,dy=vy-cy,l=Math.hypot(dx,dy),ax=vx-dx/l*11,ay=vy-dy/l*11,nx=-dy/l*5,ny=dx/l*5;
+    ctx.fillStyle='#6ee7b7';ctx.beginPath();ctx.moveTo(vx,vy);ctx.lineTo(ax+nx,ay+ny);ctx.lineTo(ax-nx,ay-ny);ctx.fill();
+    ctx.fillStyle='#c4b5fd';ctx.font='12px VT323';ctx.fillText('same vector, rotating...',6,15);
+    ang=(ang+.5)%360;requestAnimationFrame(draw);
+  })();
+})();
+
+// ── WIDGET (slide 9) ──────────────────────────────────────────────────────────
+(function(){
+  const c=document.getElementById('cR'),ctx=c.getContext('2d');
+  const sl=document.getElementById('rsl'),rv=document.getElementById('rval'),ev=document.getElementById('eval');
+  const W=c.width,H=c.height,cx=W/2,cy=H/2,gs=30,vl=115,base=[.88,.38];
+  function draw(){
+    const deg=parseFloat(sl.value),r=deg*Math.PI/180;
+    ctx.fillStyle='rgba(7,7,26,.9)';ctx.fillRect(0,0,W,H);
+    dGrid(ctx,W,H,gs,'rgba(107,33,168,.15)');
+    ctx.strokeStyle='rgba(255,255,255,.12)';ctx.lineWidth=1;
+    ctx.beginPath();ctx.moveTo(0,cy);ctx.lineTo(W,cy);ctx.stroke();
+    ctx.beginPath();ctx.moveTo(cx,0);ctx.lineTo(cx,H);ctx.stroke();
+    const rx=base[0]*Math.cos(r)-base[1]*Math.sin(r),ry=base[0]*Math.sin(r)+base[1]*Math.cos(r);
+    const vx=cx+rx*vl,vy=cy-ry*vl;
+    ctx.strokeStyle='#818cf8';ctx.lineWidth=4;ctx.shadowColor='#818cf8';ctx.shadowBlur=10;
+    ctx.beginPath();ctx.moveTo(cx,cy);ctx.lineTo(vx,vy);ctx.stroke();ctx.shadowBlur=0;
+    ctx.fillStyle='#818cf8';ctx.beginPath();ctx.arc(vx,vy,6,0,Math.PI*2);ctx.fill();
+    const qx=Math.round(vx/gs)*gs,qy=Math.round(vy/gs)*gs;
+    ctx.strokeStyle='#f472b6';ctx.lineWidth=2;ctx.setLineDash([4,3]);
+    ctx.beginPath();ctx.moveTo(vx,vy);ctx.lineTo(qx,qy);ctx.stroke();ctx.setLineDash([]);
+    ctx.fillStyle='#f472b6';ctx.shadowColor='#f472b6';ctx.shadowBlur=8;
+    ctx.beginPath();ctx.arc(qx,qy,7,0,Math.PI*2);ctx.fill();ctx.shadowBlur=0;
+    const err=Math.hypot(vx-qx,vy-qy);
+    rv.textContent=deg+'deg';ev.textContent=err.toFixed(1)+' px';
+    ev.style.color=err<8?'#6ee7b7':err<16?'#ffd23f':'#f472b6';
+    ctx.fillStyle='#c4b5fd';ctx.font='12px VT323';
+    ctx.fillText('blue = true   pink = quantized',8,15);
+    ctx.fillText('dashed = error distance',8,30);
+  }
+  sl.addEventListener('input',draw);draw();
+})();
+
+// ── DEVICE CHART (slide 13) ───────────────────────────────────────────────────
+(function(){
+  const c=document.getElementById('cDevice');
+  if(!c)return;
+  const ctx=c.getContext('2d');
+  const W=c.width,H=c.height;
+  const devices=[
+    {label:'Server (fp32)',gb:280,col:'#f472b6'},
+    {label:'Server (int8)',gb:70,col:'#818cf8'},
+    {label:'PC (int4)',gb:35,col:'#ffd23f'},
+    {label:'Phone (int4)',gb:4,col:'#6ee7b7'},
+  ];
+  const max=300;let t=0;
+  (function draw(){
+    ctx.fillStyle='#07071a';ctx.fillRect(0,0,W,H);
+    const bh=32,pad=8,lw=80;
+    const p=Math.min(t/60,1);
+    devices.forEach((d,i)=>{
+      const y=i*(bh+pad)+pad;
+      const barW=(d.gb/max)*(W-lw-16)*p;
+      ctx.fillStyle='rgba(107,33,168,.15)';ctx.fillRect(lw,y,W-lw-8,bh);
+      const g=ctx.createLinearGradient(lw,0,lw+barW,0);
+      g.addColorStop(0,d.col+'cc');g.addColorStop(1,d.col);
+      ctx.fillStyle=g;ctx.shadowColor=d.col;ctx.shadowBlur=6;
+      ctx.fillRect(lw,y,barW,bh);ctx.shadowBlur=0;
+      ctx.fillStyle='#c4b5fd';ctx.font='12px VT323';ctx.textAlign='right';
+      ctx.fillText(d.label,lw-4,y+bh/2+5);
+      if(barW>20){ctx.fillStyle='#f4f1ff';ctx.textAlign='left';ctx.fillText(d.gb+'GB',lw+barW+4,y+bh/2+5);}
+    });
+    ctx.textAlign='left';
+    t++;requestAnimationFrame(draw);
+  })();
+})();
+
+// ── S4 MEMORY BAR CHART ───────────────────────────────────────────────────────
+(function(){
+  const c = document.getElementById('c4bar');
+  if(!c) return;
+  const ctx = c.getContext('2d');
+  const models = [
+    {label:'GPT-2 (fp32)',    gb:6,    col:'#6ee7b7'},
+    {label:'Llama2 7B (fp32)',gb:28,   col:'#818cf8'},
+    {label:'Llama3 70B (fp32)',gb:280,  col:'#f472b6'},
+    {label:'Llama3 70B (int8)',gb:70,   col:'#ffd23f'},
+    {label:'Llama3 70B (int4)',gb:35,   col:'#a855f7'},
+  ];
+  const maxGB = 300;
+  let prog = 0;
+  function draw(){
+    const W = c.width, H = c.height;
+    ctx.fillStyle = '#07071a'; ctx.fillRect(0,0,W,H);
+    const lpad = 148, rpad = 54, top = 16, rowH = (H - top - 12) / models.length;
+    prog = Math.min(prog + 0.022, 1);
+    models.forEach((m, i) => {
+      const y = top + i * rowH;
+      const maxW = W - lpad - rpad;
+      const barW = (m.gb / maxGB) * maxW * prog;
+      const barH = rowH * 0.52;
+      const by = y + rowH * 0.24;
+      ctx.fillStyle = 'rgba(107,33,168,.12)';
+      ctx.fillRect(lpad, by, maxW, barH);
+      const g = ctx.createLinearGradient(lpad, 0, lpad + barW, 0);
+      g.addColorStop(0, m.col + '99'); g.addColorStop(1, m.col);
+      ctx.shadowColor = m.col; ctx.shadowBlur = barW > 10 ? 8 : 0;
+      ctx.fillStyle = g;
+      ctx.fillRect(lpad, by, barW, barH);
+      ctx.shadowBlur = 0;
+      ctx.fillStyle = '#c4b5fd'; ctx.font = '13px VT323';
+      ctx.textAlign = 'right'; ctx.textBaseline = 'middle';
+      ctx.fillText(m.label, lpad - 6, by + barH/2);
+      if(barW > 4){
+        ctx.fillStyle = '#f4f1ff'; ctx.textAlign = 'left';
+        ctx.fillText(m.gb + ' GB', lpad + barW + 6, by + barH/2);
+      }
+    });
+    ctx.strokeStyle = 'rgba(107,33,168,.3)'; ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(lpad, top); ctx.lineTo(lpad, H-8); ctx.stroke();
+    ctx.textAlign = 'left';
+    if(prog < 1) requestAnimationFrame(draw);
+  }
+  const slide4 = c.closest('.slide');
+  const obs = new MutationObserver(() => {
+    if(slide4.classList.contains('active')){ prog = 0; draw(); }
+  });
+  obs.observe(slide4, {attributes: true, attributeFilter: ['class']});
+  draw();
+})();
+
+// ── COUNT UP (slide 4) ────────────────────────────────────────────────────────
+let cDone=false;
+function doCount(){
+  if(cDone)return;cDone=true;
+  function anim(el,to,suf,dur){const s=performance.now();(function f(n){const p=Math.min((n-s)/dur,1);el.textContent=Math.round(p*to).toLocaleString()+(suf||'');if(p<1)requestAnimationFrame(f);})(s);}
+  anim(document.getElementById('cnt1'),12288,'',1100);
+  anim(document.getElementById('cnt2'),405,'B',1400);
+}
+</script>
+</body>
+</html>
