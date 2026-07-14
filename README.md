@@ -11,15 +11,21 @@ A short presentation on rotation-based quantization for AI models. It covers how
 1. Direct quantization: round each R, G, B value independently to N levels.
 2. Rotate, quantize, rotate back: rotate pixel colors into their natural axes (using PCA on the color covariance matrix), quantize on that better-fitted grid, then rotate back to RGB.
 
-It reports MSE and PSNR for both methods so you can see the quality difference directly.
+It prints MSE and PSNR for both methods and saves a side-by-side comparison image.
 
 ## Running the demo
 
+Put an image named `image.png` in the same folder as the script, then run:
+
 ```bash
-python demo.py path/to/image.png
+python demo.py
 ```
 
-You'll need numpy and Pillow: `pip install numpy pillow`.
+If `image.png` isn't found, the script generates a sample gradient automatically, so it works out of the box with no image needed.
+
+The result is saved as `rotate_quantize_result.png` and shown in a window.
+
+You'll need numpy, Pillow, and matplotlib: `pip install numpy pillow matplotlib`.
 
 ## Viewing the presentation
 
